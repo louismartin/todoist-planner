@@ -25,17 +25,16 @@ def read_token():
         return f.read().rstrip('\n')
 
 
-def get_inbox_id(api):
-    for project in api.state['projects']:
-        if project['inbox_project']:
+def get_project_id_by_name(name, api):
+    for project in api.projects.all():
+        if project['name'].lower() == name.lower():
             return project['id']
 
 
-def get_active_inbox_tasks(api):
-    inbox_id = get_inbox_id(api)
+def get_active_tasks(project_id, api):
     tasks = []
     for task in api.items.all():
-        if task['project_id'] != inbox_id:
+        if task['project_id'] != project_id:
             continue
         if task['checked']:
             continue
@@ -159,10 +158,17 @@ def label_task(task):
 
 
 def label_tasks(tasks):
-    for task in tasks:
-        if not is_labeled(task):
-            label_task(task)
-            print('\n')
+    unlabeled_tasks = [task for task in tasks if not is_labeled(task)]
+    if not unlabeled_tasks:
+        print('No unlabeled tasks.')
+        return
+    print('~' * 50)
+    print(f'There are {len(unlabeled_tasks)} unlabeled tasks:')
+    for i, task in enumerate(unlabeled_tasks):
+        print(f'{i}.')
+        label_task(task)
+        print('\n')
+    print('~' * 50)
 
 
 def sort_tasks(tasks):
@@ -173,7 +179,9 @@ if __name__ == '__main__':
     api = TodoistAPI(read_token())
     api.reset_state()
     api.sync()
-    tasks = get_active_inbox_tasks(api)
+    project_name = input('What project would you like to work on?\n')
+    project_id = get_project_id_by_name(project_name, api)
+    tasks = get_active_tasks(project_id, api)
     label_tasks(tasks)
     api.commit()
     sorted_tasks = sort_tasks(tasks)
