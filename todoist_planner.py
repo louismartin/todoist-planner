@@ -1,6 +1,7 @@
 import math
 from pathlib import Path
 import re
+import sys
 
 from todoist.api import TodoistAPI
 
@@ -148,13 +149,17 @@ def is_labeled(task):
 def label_task(task):
     stripped_content = re.sub(r'<.+>', '', task['content']).strip()
     print(f'"{stripped_content}"')
-    importance = int(input('How important is this task? (1-4):'))
-    urgency = int(input('How urgent is this task? (1-4):'))
-    duration = int(input('How long will it take? (minutes)'))
+    importance = int(input('How important is this task? (1-4): '))
+    # TODO: Better way to handle this case
+    if importance == 0:
+        return
+    urgency = int(input('How urgent is this task? (1-4): '))
+    duration = int(input('How long will it take? (minutes): '))
     priority = compute_priority(importance, urgency)
     # TODO: Store this information in a note?
     task.update(content=f'{stripped_content} <i{importance}> <u{urgency}> <{duration}m>',
                 priority=(4 - priority) + 1)
+    api.commit()
 
 
 def label_tasks(tasks):
@@ -163,9 +168,9 @@ def label_tasks(tasks):
         print('No unlabeled tasks.')
         return
     print('~' * 50)
-    print(f'There are {len(unlabeled_tasks)} unlabeled tasks:')
+    print(f'There are {len(unlabeled_tasks)} unlabeled tasks:\n')
     for i, task in enumerate(unlabeled_tasks):
-        print(f'{i}.')
+        sys.stdout.write(f'{i+1}.')
         label_task(task)
         print('\n')
     print('~' * 50)
@@ -176,16 +181,16 @@ def sort_tasks(tasks):
 
 
 if __name__ == '__main__':
+    print('Welcome to Todoist planner!')
     api = TodoistAPI(read_token())
     api.reset_state()
     api.sync()
-    project_name = input('What project would you like to work on?\n')
+    project_name = input('What project would you like to work on? ')
     project_id = get_project_id_by_name(project_name, api)
     tasks = get_active_tasks(project_id, api)
     label_tasks(tasks)
-    api.commit()
     sorted_tasks = sort_tasks(tasks)
-    time_remaining = int(input('How long do you have? (minutes)'))
+    time_remaining = int(input('How long do you have? (minutes): '))
     selected_tasks = []
     for task in sorted_tasks:
         # TODO: Ask to split tasks that are too long
