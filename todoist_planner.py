@@ -47,46 +47,6 @@ def get_labels(api):
     return {label['name']: label['id'] for label in api.labels.all()}
 
 
-def _deprecated_get_importance_ids(api):
-    labels = get_labels(api)
-    names_to_level = {'i1': 1, 'i2': 2, 'i3': 3, 'i4': 4}
-    names_to_id = {name: labels[name] for name in names_to_level.keys()}
-    return {importance: names_to_id[name]
-            for name, importance in names_to_level.items()}
-
-
-def _deprecated_get_urgency_ids(api):
-    labels = get_labels(api)
-    names_to_level = {'u1': 1, 'u2': 2, 'u3': 3, 'u4': 4}
-    names_to_id = {name: labels[name] for name in names_to_level.keys()}
-    return {importance: names_to_id[name]
-            for name, importance in names_to_level.items()}
-
-
-def _deprecated_get_importance(task, api):
-    ids_to_level = reverse_dictionary(_deprecated_get_importance_ids(api))
-    for label_id in task['labels']:
-        if label_id in ids_to_level:
-            return ids_to_level[label_id]
-    return None
-
-
-def _deprecated_get_urgency(task, api):
-    ids_to_level = reverse_dictionary(_deprecated_get_urgency_ids(api))
-    for label_id in task['labels']:
-        if label_id in ids_to_level:
-            return ids_to_level[label_id]
-    return None
-
-
-def _deprecated_parse_duration(title):
-    match = re.search(r'<(\d*)h(\d+)m?>', title)
-    if match is None:
-        return None
-    h, m = match.groups()
-    return int(h), int(m)
-
-
 def get_importance(task):
     match = re.search(r'<i(\d)>', task['content'])
     if match is None:
@@ -195,7 +155,7 @@ if __name__ == '__main__':
     for task in sorted_tasks:
         # TODO: Ask to split tasks that are too long
         duration = get_duration(task)
-        if duration < time_remaining:
+        if duration <= time_remaining:
             print(f'Selected: "{task["content"]}" ({duration}m)')
             selected_tasks.append(task)
             time_remaining -= duration
