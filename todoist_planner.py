@@ -1,21 +1,111 @@
-from collections import namedtuple, OrderedDict
 import math
 from pathlib import Path
 import re
 import sys
 
 from todoist.api import TodoistAPI
+from todoist.models import Item
 
 
 __file__ = '/Users/louismartin/dev/todoist-planner/Untitled.ipynb'
 REPO_DIR = Path(__file__).resolve().parent
 token_filepath = REPO_DIR / 'token'
-Attribute = namedtuple('Attribute', ['parse_regex', 'str_format', 'ask_text'])
-attributes = OrderedDict({
-        'importance': Attribute(r'<i(\d)>', '<i{}>', 'How important is this task? (1-4): '),
-        'urgency': Attribute(r'<u(\d)>', '<u{}>', 'How urgent is this task? (1-4): '),
-        'duration': Attribute(r'<(\d+)m>', '<{}m>', 'How long will this task take? (minutes): '),
-})
+
+
+class Attribute(property):
+    '''Custom property method that parses the task content to get an attribute'''
+
+    def __init__(self, str_format):
+        attr_regex = str_format.format(r'(\d*)')  # Attibutes have to be integers (for now)
+
+        def set_attribute(task, value):
+            value = int(value)
+            if re.search(attr_regex, task['content']) is None:
+                task['content'] += ' ' + str_format.format('')
+            task['content'] = re.sub(attr_regex, str_format.format(value), task['content'])
+            # Update priority everytime an attribute is set
+            if task.todoist_priority is not None:
+                task.update(priority=task.todoist_priority)
+
+        def get_attribute(task):
+            match = re.search(attr_regex, task['content'])
+            if match is None:
+                return None
+            return int(match.groups()[0])
+
+        # https://docs.python.org/3/library/functions.html#property
+        super().__init__(get_attribute, set_attribute)
+
+
+class Task(Item):
+
+    def __init__(self, item):
+        super().__init__(item.data, item.api)
+        self.attributes = ['importance', 'urgency', 'duration']
+        for attr_name, attribute in zip(self.attributes, [Attribute('<i{}>'),
+                                                          Attribute('<u{}>'),
+                                                          Attribute('<{}m>')]):
+            # We set custom properties as static class variables (that's how properties work in python)
+            setattr(self.__class__, attr_name, attribute)
+
+    @property
+    def stripped_content(self):
+        return re.sub(r'<.+>', '', self['content']).strip()
+
+    @stripped_content.setter
+    def stripped_content(self, value):
+        self['content'] = re.sub(self.stripped_content, value, self['content'])
+
+    @property
+    def priority(self):
+        if None in [self.importance, self.urgency]:
+            return None
+        importance_weight = 1.5
+        urgency_weight = 1
+        return (importance_weight * self.importance + urgency_weight * self.urgency) / (importance_weight + urgency_weight)  # noqa: E501
+
+    @property
+    def todoist_priority(self):
+        if self.priority is None:
+            return
+        # Note: Keep in mind that very urgent is the priority 1 on clients. So, p1 will return 4 in the API.
+        return (4 - math.ceil(self.priority)) + 1
+
+    def is_labeled(self):
+        return (None not in [getattr(self, attr_name) for attr_name in self.attributes])
+
+    def label(self):
+        print(f'"{self.stripped_content}"')
+        ask_texts = {
+            'importance': 'How important is this task? (1-4): ',
+            'urgency': 'How urgent is this task? (1-4): ',
+            'duration': 'How long will this task take? (minutes): ',
+        }
+        for attr_name in self.attributes:
+            current_value = getattr(self, attr_name)
+            ask_text = ask_texts[attr_name]
+            if current_value is not None:
+                # TODO: Remove this value if user inputs something
+                ask_text += str(current_value)
+            new_value = input(ask_text)
+            # TODO: Better way to handle this cases
+            if new_value == '':   # User just validated current value
+                new_value = current_value
+            elif new_value == 'n':  # next
+                return
+            elif new_value == 'd':  # delete
+                self.delete()
+                return
+            elif new_value == 'e':  # edit
+                self.stripped_content = input('New task content: \n')
+                self.update(content=self['content'])
+                self.label()
+                return
+            elif new_value == 'c':  # complete
+                self.complete()
+                return
+            setattr(self, attr_name, new_value)
+        self.update(content=self['content'], priority=self.todoist_priority)
 
 
 def ask_for_token():
@@ -45,24 +135,17 @@ def get_project_id_by_name(name, api):
 
 def get_active_tasks(project_id, api):
     tasks = []
-    for task in api.items.all():
-        if task['project_id'] != project_id:
+    for item in api.items.all():
+        if item['project_id'] != project_id:
             continue
-        if task['checked']:
+        if item['checked']:
             continue
-        tasks.append(task)
+        tasks.append(Task(item))
     return tasks
 
 
 def get_labels(api):
     return {label['name']: label['id'] for label in api.labels.all()}
-
-
-def parse_attribute(task, parse_regex):
-    match = re.search(parse_regex, task['content'])
-    if match is None:
-        return None
-    return int(match.groups()[0])
 
 
 def get_notes(task, api):
@@ -74,70 +157,12 @@ def get_notes(task, api):
     return notes
 
 
-def compute_priority(importance, urgency):
-    importance_weight = 1.5
-    urgency_weight = 1
-    return (importance_weight * importance + urgency_weight * urgency) / (importance_weight + urgency_weight)
-
-
-def compute_todoist_priority(importance, urgency):
-    priority = math.ceil(compute_priority(importance, urgency))
-    # Note: Keep in mind that very urgent is the priority 1 on clients. So, p1 will return 4 in the API.
-    return (4 - priority) + 1
-
-
 def reverse_dictionary(dic):
     return {v: k for k, v in dic.items()}
 
 
-def is_labeled(task):
-    attribute_values = {attr_name: parse_attribute(task, attribute.parse_regex)
-                        for attr_name, attribute in attributes.items()}
-    if None in attribute_values.values():
-        return False
-    # TODO: this should be done somewhere else
-    # Set to matching priority
-    task.update(priority=compute_todoist_priority(attribute_values['importance'], attribute_values['urgency']))
-    return True
-
-
-def label_task(task):
-    stripped_content = re.sub(r'<.+>', '', task['content']).strip()
-    print(f'"{stripped_content}"')
-    attribute_values = {}
-    for attr_name, attribute in attributes.items():
-        current_value = parse_attribute(task, attribute.parse_regex)
-        ask_text = attribute.ask_text
-        if current_value is not None:
-            # TODO: Remove this value if user inputs something
-            ask_text += str(current_value)
-        value = input(ask_text)
-        # TODO: Better way to handle this case
-        if value == '':   # User just validated current value
-            value = current_value
-        elif value == 'n':  # next
-            return
-        elif value == 'd':  # delete
-            task.delete()
-            return
-        elif value == 'e':  # edit
-            task.update(content=input('New task content: \n'))
-            label_task(task)
-            # TODO: Maybe we should keep the tasks current attribute values
-            # attributes)
-            return
-        elif value == 'c':  # complete
-            task.complete()
-            return
-        attribute_values[attr_name] = int(value)
-    attributes_str = ' '.join([attributes[attr_name].str_format.format(value)
-                               for attr_name, value in attribute_values.items()])
-    task.update(content=f'{stripped_content} {attributes_str}',
-                priority=compute_todoist_priority(attribute_values['importance'], attribute_values['urgency']))
-
-
 def label_tasks(tasks, api):
-    unlabeled_tasks = [task for task in tasks if not is_labeled(task)]
+    unlabeled_tasks = [task for task in tasks if not task.is_labeled()]
     if not unlabeled_tasks:
         print('No unlabeled tasks.')
         return
@@ -145,17 +170,14 @@ def label_tasks(tasks, api):
     print(f'There are {len(unlabeled_tasks)} unlabeled tasks:\n')
     for i, task in enumerate(unlabeled_tasks):
         sys.stdout.write(f'{i+1}.')
-        label_task(task)
+        task.label()
         api.commit()
         print('\n')
     print('~' * 50)
 
 
 def sort_tasks(tasks):
-    importance = parse_attribute(task, attributes['importance'].parse_regex)
-    urgency = parse_attribute(task, attributes['urgency'].parse_regex)
-    duration = parse_attribute(task, attributes['duration'].parse_regex)
-    return sorted(tasks, key=lambda task: (compute_priority(importance, urgency), -duration))
+    return sorted(tasks, key=lambda task: (task.priority, -task.duration))
 
 
 def filter_tasks(tasks, api):
@@ -185,8 +207,7 @@ if __name__ == '__main__':
     selected_tasks = []
     for task in sorted_tasks:
         # TODO: Ask to split tasks that are too long
-        duration = parse_attribute(task, attributes['duration'].parse_regex)
-        if duration <= time_remaining:
-            print(f'Selected: "{task["content"]}" ({duration}m)')
+        if task.duration <= time_remaining:
+            print(f'Selected: "{task["content"]}" ({task.duration}m)')
             selected_tasks.append(task)
-            time_remaining -= duration
+            time_remaining -= task.duration
