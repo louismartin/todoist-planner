@@ -77,16 +77,17 @@ def get_notes(task, api):
 def compute_priority(importance, urgency):
     importance_weight = 1.5
     urgency_weight = 1
-    return math.ceil((importance_weight * importance + urgency_weight * urgency) / (importance_weight + urgency_weight))
+    return (importance_weight * importance + urgency_weight * urgency) / (importance_weight + urgency_weight)
+
+
+def compute_todoist_priority(importance, urgency):
+    priority = math.ceil(compute_priority(importance, urgency))
+    # Note: Keep in mind that very urgent is the priority 1 on clients. So, p1 will return 4 in the API.
+    return (4 - priority) + 1
 
 
 def reverse_dictionary(dic):
     return {v: k for k, v in dic.items()}
-
-
-def get_priority(task):
-    # Note: Keep in mind that very urgent is the priority 1 on clients. So, p1 will return 4 in the API.
-    return (4 - task['priority']) + 1
 
 
 def is_labeled(task):
@@ -94,11 +95,9 @@ def is_labeled(task):
                         for attr_name, attribute in attributes.items()}
     if None in attribute_values.values():
         return False
-    priority = compute_priority(attribute_values['importance'], attribute_values['urgency'])
-    actual_priority = get_priority(task)
-    if priority != actual_priority:
-        print(f'Warning: actual_priority != computed_priority for task "{task["content"]}"')
-        return False
+    # TODO: this should be done somewhere else
+    # Set to matching priority
+    task.update(priority=compute_todoist_priority(attribute_values['importance'], attribute_values['urgency']))
     return True
 
 
@@ -131,12 +130,10 @@ def label_task(task):
             task.complete()
             return
         attribute_values[attr_name] = int(value)
-    priority = compute_priority(attribute_values['importance'], attribute_values['urgency'])
-    # TODO: Store this information in a note?
     attributes_str = ' '.join([attributes[attr_name].str_format.format(value)
                                for attr_name, value in attribute_values.items()])
     task.update(content=f'{stripped_content} {attributes_str}',
-                priority=(4 - priority) + 1)
+                priority=compute_todoist_priority(attribute_values['importance'], attribute_values['urgency']))
 
 
 def label_tasks(tasks, api):
@@ -155,8 +152,10 @@ def label_tasks(tasks, api):
 
 
 def sort_tasks(tasks):
-    return sorted(tasks, key=lambda task: (get_priority(task),
-                                           -parse_attribute(task, attributes['duration'].parse_regex)))
+    importance = parse_attribute(task, attributes['importance'].parse_regex)
+    urgency = parse_attribute(task, attributes['urgency'].parse_regex)
+    duration = parse_attribute(task, attributes['duration'].parse_regex)
+    return sorted(tasks, key=lambda task: (compute_priority(importance, urgency), -duration))
 
 
 def filter_tasks(tasks, api):
