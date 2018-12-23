@@ -9,7 +9,6 @@ from todoist.api import TodoistAPI
 from todoist.models import Item
 
 
-__file__ = '/Users/louismartin/dev/todoist-planner/Untitled.ipynb'
 REPO_DIR = Path(__file__).resolve().parent
 token_filepath = REPO_DIR / 'token'
 
