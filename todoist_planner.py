@@ -1,7 +1,9 @@
+from datetime import datetime, timedelta
 import math
 from pathlib import Path
 import re
 import sys
+import time
 
 from todoist.api import TodoistAPI
 from todoist.models import Item
@@ -23,9 +25,6 @@ class Attribute(property):
             if re.search(attr_regex, task['content']) is None:
                 task['content'] += ' ' + str_format.format('')
             task['content'] = re.sub(attr_regex, str_format.format(value), task['content'])
-            # Update priority everytime an attribute is set
-            if task.todoist_priority is not None:
-                task.update(priority=task.todoist_priority)
 
         def get_attribute(task):
             match = re.search(attr_regex, task['content'])
@@ -68,17 +67,21 @@ class Task(Item):
     def todoist_priority(self):
         if self.priority is None:
             return
+        max_priority = 8
         # Note: Keep in mind that very urgent is the priority 1 on clients. So, p1 will return 4 in the API.
-        return (4 - math.ceil(self.priority)) + 1
+        return (4 - math.ceil(self.priority / max_priority * 4)) + 1
 
     def is_labeled(self):
         return (None not in [getattr(self, attr_name) for attr_name in self.attributes])
 
+    def update_attributes(self):
+        self.update(content=self['content'], priority=self.todoist_priority)
+
     def label(self):
         print(f'"{self.stripped_content}"')
         ask_texts = {
-            'importance': 'How important is this task? (1-4): ',
-            'urgency': 'How urgent is this task? (1-4): ',
+            'importance': 'How important is this task? (1-8): ',
+            'urgency': 'How urgent is this task? (1-8): ',
             'duration': 'How long will this task take? (minutes): ',
         }
         for attr_name in self.attributes:
@@ -98,14 +101,13 @@ class Task(Item):
                 return
             elif new_value == 'e':  # edit
                 self.stripped_content = input('New task content: \n')
-                self.update(content=self['content'])
                 self.label()
                 return
             elif new_value == 'c':  # complete
                 self.complete()
                 return
             setattr(self, attr_name, new_value)
-        self.update(content=self['content'], priority=self.todoist_priority)
+        self.update_attributes()
 
 
 def ask_for_token():
@@ -192,18 +194,42 @@ def filter_tasks(tasks, api):
     return [task for task in tasks if not have_elements_in_common(task['labels'], excluded_label_ids)]
 
 
+def seconds_to_human_readable(seconds, display_seconds=True):
+    d = datetime(1, 1, 1) + timedelta(seconds=int(seconds))
+    human_readable = ''
+    if display_seconds:
+        human_readable = f'{d.second}s'
+    if seconds >= 60:
+        human_readable = f'{d.minute}m {human_readable}'
+    if seconds >= 3600:
+        human_readable = f'{d.hour}h {human_readable}'
+    if seconds >= 86400:
+        human_readable = f'{d.day-1}d {human_readable}'
+    return human_readable.strip()
+
+
+def start_timer(minutes):
+    start_time = time.time()
+    elapsed = 0
+    while elapsed < (minutes * 60):
+        elapsed = time.time() - start_time
+        sys.stdout.write(f'\rElapsed: {seconds_to_human_readable(elapsed)}')
+        time.sleep(1)
+
+
 if __name__ == '__main__':
     print('Welcome to Todoist planner!')
     api = TodoistAPI(read_token())
+    project_name = input('What project would you like to work on? ')
     api.reset_state()
     api.sync()
-    project_name = input('What project would you like to work on? ')
     project_id = get_project_id_by_name(project_name, api)
     tasks = get_active_tasks(project_id, api)
     tasks = filter_tasks(tasks, api)
     label_tasks(tasks, api)
     sorted_tasks = sort_tasks(tasks)
-    time_remaining = int(input('How long do you have? (minutes): '))
+    time_available = int(input('How long do you have? (minutes): '))
+    time_remaining = time_available
     selected_tasks = []
     for task in sorted_tasks:
         # TODO: Ask to split tasks that are too long
@@ -211,3 +237,4 @@ if __name__ == '__main__':
             print(f'Selected: "{task["content"]}" ({task.duration}m)')
             selected_tasks.append(task)
             time_remaining -= task.duration
+    start_timer(time_available)
