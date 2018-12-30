@@ -16,14 +16,19 @@ token_filepath = REPO_DIR / 'token'
 class Attribute(property):
     '''Custom property method that parses the task content to get an attribute'''
 
-    def __init__(self, str_format):
+    def __init__(self, str_format, prepend=False, callback=True):
         attr_regex = str_format.format(r'(\d*)')  # Attibutes have to be integers (for now)
 
         def set_attribute(task, value):
             value = int(value)
             if re.search(attr_regex, task['content']) is None:
-                task['content'] += ' ' + str_format.format('')
+                if prepend:
+                    task['content'] = str_format.format('') + ' ' + task['content']
+                else:
+                    task['content'] += ' ' + str_format.format('')
             task['content'] = re.sub(attr_regex, str_format.format(value), task['content'])
+            if callback:
+                task.attribute_set_callback()
 
         def get_attribute(task):
             match = re.search(attr_regex, task['content'])
@@ -37,14 +42,21 @@ class Attribute(property):
 
 class Task(Item):
 
+    max_attribute_value = 8
+
     def __init__(self, item):
         super().__init__(item.data, item.api)
-        self.attributes = ['importance', 'urgency', 'duration']
-        for attr_name, attribute in zip(self.attributes, [Attribute('<i{}>'),
-                                                          Attribute('<u{}>'),
-                                                          Attribute('<{}m>')]):
+        self.attribute_names = ['importance', 'urgency', 'duration']
+        for attr_name, attribute in zip(self.attribute_names, [Attribute('<i{}>'),
+                                                               Attribute('<u{}>'),
+                                                               Attribute('<{}m>')]):
             # We set custom properties as static class variables (that's how properties work in python)
             setattr(self.__class__, attr_name, attribute)
+        setattr(self.__class__, 'priority', Attribute('<p{}>', prepend=True, callback=False))
+
+    def attribute_set_callback(self):
+        if self.get_priority() is not None:
+            self.priority = round(self.get_priority() * 10)
 
     @property
     def stripped_content(self):
@@ -54,36 +66,34 @@ class Task(Item):
     def stripped_content(self, value):
         self['content'] = re.sub(self.stripped_content, value, self['content'])
 
-    @property
-    def priority(self):
+    def get_priority(self):
         if None in [self.importance, self.urgency]:
             return None
         importance_weight = 1.5
         urgency_weight = 1
-        return (importance_weight * self.importance + urgency_weight * self.urgency) / (importance_weight + urgency_weight)  # noqa: E501
+        priority = (importance_weight * self.importance + urgency_weight * self.urgency) / (importance_weight + urgency_weight)  # noqa: E501
+        return priority / self.max_attribute_value  # Normalize to a float in [0, 1]
 
-    @property
-    def todoist_priority(self):
-        if self.priority is None:
+    def get_todoist_priority(self):
+        if self.get_priority() is None:
             return
-        max_priority = 8
         # Note: Keep in mind that very urgent is the priority 1 on clients. So, p1 will return 4 in the API.
-        return (4 - math.ceil(self.priority / max_priority * 4)) + 1
+        return (4 - math.ceil(self.get_priority() * 4)) + 1
 
     def is_labeled(self):
-        return (None not in [getattr(self, attr_name) for attr_name in self.attributes])
+        return (None not in [getattr(self, attr_name) for attr_name in self.attribute_names])
 
     def update_attributes(self):
-        self.update(content=self['content'], priority=self.todoist_priority)
+        self.update(content=self['content'], priority=self.get_todoist_priority())
 
     def label(self):
         print(f'"{self.stripped_content}"')
         ask_texts = {
-            'importance': 'How important is this task? (1-8): ',
-            'urgency': 'How urgent is this task? (1-8): ',
+            'importance': f'How important is this task? (1-{self.max_attribute_value}): ',
+            'urgency': f'How urgent is this task? (1-{self.max_attribute_value}): ',
             'duration': 'How long will this task take? (minutes): ',
         }
-        for attr_name in self.attributes:
+        for attr_name in self.attribute_names:
             current_value = getattr(self, attr_name)
             ask_text = ask_texts[attr_name]
             if current_value is not None:
@@ -132,6 +142,7 @@ def get_project_id_by_name(name, api):
     for project in api.projects.all():
         if project['name'].lower() == name.lower():
             return project['id']
+    raise NameError(f'Project {name} cannot be found.')
 
 
 def get_active_tasks(project_id, api):
@@ -178,7 +189,7 @@ def label_tasks(tasks, api):
 
 
 def sort_tasks(tasks):
-    return sorted(tasks, key=lambda task: (task.priority, -task.duration))
+    return sorted(tasks, key=lambda task: (task.get_priority(), -task.duration))
 
 
 def filter_tasks(tasks, api):
