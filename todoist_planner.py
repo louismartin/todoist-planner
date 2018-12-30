@@ -226,6 +226,10 @@ if __name__ == '__main__':
     tasks = get_active_tasks(project_id, api)
     tasks = filter_tasks(tasks, api)
     label_tasks(tasks, api)
+    # Reload active tasks (tasks may have been completed or deleted)
+    # TODO: find a better way to handle this case
+    tasks = get_active_tasks(project_id, api)
+    tasks = filter_tasks(tasks, api)
     sorted_tasks = sort_tasks(tasks)
     time_available = int(input('How long do you have? (minutes): '))
     time_remaining = time_available
