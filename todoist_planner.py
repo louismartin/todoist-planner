@@ -5,33 +5,36 @@ import re
 import sys
 import time
 
+from tqdm import tqdm
+
 from todoist.api import TodoistAPI
 from todoist.models import Item
 
 
 REPO_DIR = Path(__file__).resolve().parent
-token_filepath = REPO_DIR / 'token'
+TOKEN_FILEPATH = REPO_DIR / 'token'
+MODIFIED_TASKS = {}  # Track modified tasks for batch processing (server limits requests
 
 
 class Attribute(property):
     '''Custom property method that parses the task content to get an attribute'''
 
     def __init__(self, str_format, prepend=False, callback=True):
-        attr_regex = str_format.format(r'(\d*)')  # Attibutes have to be integers (for now)
+        attr_regex = str_format.format(r'(\d*?)')  # Attibutes have to be integers (for now)
 
         def set_attribute(task, value):
             value = int(value)
-            if re.search(attr_regex, task['content']) is None:
+            if re.search(attr_regex, task.content) is None:
                 if prepend:
-                    task['content'] = str_format.format('') + ' ' + task['content']
+                    task.content = str_format.format('') + ' ' + task.content
                 else:
-                    task['content'] += ' ' + str_format.format('')
-            task['content'] = re.sub(attr_regex, str_format.format(value), task['content'])
+                    task.content += ' ' + str_format.format('')
+            task.content = re.sub(attr_regex, str_format.format(value), task.content)
             if callback:
                 task.attribute_set_callback()
 
         def get_attribute(task):
-            match = re.search(attr_regex, task['content'])
+            match = re.search(attr_regex, task.content)
             if match is None:
                 return None
             return int(match.groups()[0])
@@ -46,6 +49,7 @@ class Task(Item):
 
     def __init__(self, item):
         super().__init__(item.data, item.api)
+        self.content = self['content']  # We will work on content as an attribute instead of an element of a dict
         self.attribute_names = ['importance', 'urgency', 'duration']
         for attr_name, attribute in zip(self.attribute_names, [Attribute('<i{}>'),
                                                                Attribute('<u{}>'),
@@ -56,15 +60,17 @@ class Task(Item):
 
     def attribute_set_callback(self):
         if self.get_priority() is not None:
-            self.priority = round(self.get_priority() * 10)
+            # Convert the priority to be between 0 and 9 included
+            self.priority = round(self.get_priority() * 10) - 1
+        MODIFIED_TASKS[self['id']] = self
 
     @property
     def stripped_content(self):
-        return re.sub(r'<.+>', '', self['content']).strip()
+        return re.sub(r'<.+?>', '', self.content).strip()
 
     @stripped_content.setter
     def stripped_content(self, value):
-        self['content'] = re.sub(self.stripped_content, value, self['content'])
+        self.content = re.sub(self.stripped_content, value, self.content)
 
     def get_priority(self):
         if None in [self.importance, self.urgency]:
@@ -84,7 +90,7 @@ class Task(Item):
         return (None not in [getattr(self, attr_name) for attr_name in self.attribute_names])
 
     def update_attributes(self):
-        self.update(content=self['content'], priority=self.get_todoist_priority())
+        self.update(content=self.content, priority=self.get_todoist_priority())
 
     def label(self):
         print(f'"{self.stripped_content}"')
@@ -116,7 +122,6 @@ class Task(Item):
                 self.complete()
                 return
             setattr(self, attr_name, new_value)
-        self.update_attributes()
 
 
 def ask_for_token():
@@ -124,18 +129,59 @@ def ask_for_token():
     text += '\nYou can find it in "Todoist Settings -> Integrations -> API token":'
     text += '\nhttps://en.todoist.com/prefs/integrations\n'
     token = input(text)
-    with token_filepath.open('w') as f:
+    with TOKEN_FILEPATH.open('w') as f:
         f.write(token + '\n')
 
 
 def read_token():
-    if not token_filepath.exists():
+    if not TOKEN_FILEPATH.exists():
         ask_for_token()
-    with token_filepath.open('r') as f:
+    with TOKEN_FILEPATH.open('r') as f:
         token = f.read().rstrip('\n')
     if token == '':
         ask_for_token()
     return token
+
+
+def commit(api):
+    def sync_commands_with_retry(commands, api):
+        def is_valid(response):
+            if type(response) == str:
+                print(f'Response is a string ({response}), not valid.')
+                return False
+            if response.get('error_tag', None) == 'LIMITS_REACHED':
+                print(f'Limits reached.')
+                return False
+            assert all(v == 'ok' for _, v in response['sync_status'].items()), response
+            return True
+
+        response = api.sync(commands)
+        sleep_time = 5
+        while not is_valid(response):
+            print(f'Retrying in {sleep_time} seconds.')
+            time.sleep(sleep_time)
+            sleep_time *= 2
+            response = api.sync(commands)
+
+    def batch_commands(commands):
+        batch = []
+        while len(commands) > 0:
+            batch.append(commands.pop())
+            if len(batch) == 100:
+                yield batch
+                batch = []
+        if len(batch) > 0:
+            yield batch
+
+    # Create one command for each modified task
+    for task in list(MODIFIED_TASKS.values()):
+        task.update_attributes()
+    # Group commands by batches of 100
+    pbar = tqdm(total=len(api.queue), desc='Committing')
+    for batch in batch_commands(api.queue):
+        sync_commands_with_retry(batch, api)
+        pbar.update(len(batch))
+    assert len(api.queue) == 0
 
 
 def get_project_id_by_name(name, api):
@@ -183,8 +229,8 @@ def label_tasks(tasks, api):
     for i, task in enumerate(unlabeled_tasks):
         sys.stdout.write(f'{i+1}.')
         task.label()
-        api.commit()
         print('\n')
+    commit(api)
     print('~' * 50)
 
 
