@@ -16,6 +16,11 @@ TOKEN_FILEPATH = REPO_DIR / 'token'
 MODIFIED_TASKS = {}  # Track modified tasks for batch processing (server limits requests
 
 
+def register_task_as_modified(task):
+    global MODIFIED_TASKS  # Not necessary but more explicit
+    MODIFIED_TASKS[task['id']] = task
+
+
 class Attribute(property):
     '''Custom property method that parses the task content to get an attribute'''
 
@@ -61,8 +66,8 @@ class Task(Item):
     def attribute_set_callback(self):
         if self.get_priority() is not None:
             # Convert the priority to be between 0 and 9 included
-            self.priority = round(self.get_priority() * 10) - 1
-        MODIFIED_TASKS[self['id']] = self
+            self.priority = f'{round(self.get_priority() * 100) - 1:02d}'
+        register_task_as_modified(self)
 
     @property
     def stripped_content(self):
@@ -128,6 +133,13 @@ class Task(Item):
                 return
             setattr(self, attr_name, new_value)
 
+    def add_subtask(self, content, api):
+        # This will add a command to api.queue which will be committed in the next commit()
+        api.items.add(content,
+                      project_id=self['project_id'],
+                      item_order=self['item_order'],
+                      indent=self['indent'] + 1)
+
 
 def ask_for_token():
     text = 'Please copy your todoist API token.'
@@ -192,8 +204,10 @@ def commit(api):
             yield batch
 
     # Create one command for each modified task
+    global MODIFIED_TASKS
     for task in list(MODIFIED_TASKS.values()):
         task.update_attributes()
+    MODIFIED_TASKS = {}
     # Group commands by batches of 100
     pbar = tqdm(total=len(api.queue), desc='Committing')
     for batch in batch_commands(api.queue):

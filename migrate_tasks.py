@@ -1,6 +1,4 @@
-from todoist.api import TodoistAPI
-
-from todoist_planner import read_token, get_project_name, get_api, commit, get_active_tasks, filter_tasks, get_project_id_by_name
+from todoist_planner import get_project_name, get_api, commit, get_active_tasks, filter_tasks, get_project_id_by_name
 
 
 def migrate_task(task):
@@ -22,4 +20,8 @@ if __name__ == '__main__':
         initial_content = task.content
         migrate_task(task)
         print(f'{initial_content} -> {task.content}')
-    commit(api)
+    answer = input('Commit changes? (y-n)')
+    if answer == 'y':
+        commit(api)
+    else:
+        print('Exiting without committing.')
