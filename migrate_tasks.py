@@ -12,7 +12,6 @@ def migrate_task(task):
 
 
 if __name__ == '__main__':
-    print('Welcome to Todoist planner!')
     api = TodoistAPI(read_token())
     project_name = input('What project would you like to migrate? ')
     api.reset_state()

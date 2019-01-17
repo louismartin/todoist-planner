@@ -77,8 +77,11 @@ class Task(Item):
             return None
         importance_weight = 1.5
         urgency_weight = 1
-        priority = (importance_weight * self.importance + urgency_weight * self.urgency) / (importance_weight + urgency_weight)  # noqa: E501
-        return priority / self.max_attribute_value  # Normalize to a float in [0, 1]
+        duration_weight = 0.5
+        weighted_sum = (importance_weight * (self.importance / self.max_attribute_value)
+                        + urgency_weight * (self.urgency / self.max_attribute_value)
+                        + duration_weight * min(self.duration / 300, 1))
+        return weighted_sum / (importance_weight + urgency_weight + duration_weight)
 
     def get_todoist_priority(self):
         if self.get_priority() is None:
