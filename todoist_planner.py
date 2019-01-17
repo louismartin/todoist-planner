@@ -50,7 +50,7 @@ class Attribute(property):
 
 class Task(Item):
 
-    max_attribute_value = 8
+    max_attribute_value = 5
 
     def __init__(self, item):
         super().__init__(item.data, item.api)

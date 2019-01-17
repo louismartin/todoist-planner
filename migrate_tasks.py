@@ -20,7 +20,7 @@ if __name__ == '__main__':
         initial_content = task.content
         migrate_task(task)
         print(f'{initial_content} -> {task.content}')
-    answer = input('Commit changes? (y-n)')
+    answer = input('Commit changes? (y/n): ')
     if answer == 'y':
         commit(api)
     else:
