@@ -81,7 +81,9 @@ class Task(Item):
         weighted_sum = (importance_weight * (self.importance / self.max_attribute_value)
                         + urgency_weight * (self.urgency / self.max_attribute_value)
                         + duration_weight * min(self.duration / 300, 1))
-        return weighted_sum / (importance_weight + urgency_weight + duration_weight)
+        priority = weighted_sum / (importance_weight + urgency_weight + duration_weight)
+        assert priority <= 1
+        return priority
 
     def get_todoist_priority(self):
         if self.get_priority() is None:
@@ -144,6 +146,19 @@ def read_token():
     if token == '':
         ask_for_token()
     return token
+
+
+def get_project_name():
+    if len(sys.argv) == 2:
+        return sys.argv[1]
+    return input('What project would you like to work on? ')
+
+
+def get_api():
+    api = TodoistAPI(read_token())
+    api.reset_state()
+    api.sync()
+    return api
 
 
 def commit(api):
@@ -278,10 +293,8 @@ def start_timer(minutes):
 
 if __name__ == '__main__':
     print('Welcome to Todoist planner!')
-    api = TodoistAPI(read_token())
-    project_name = input('What project would you like to work on? ')
-    api.reset_state()
-    api.sync()
+    project_name = get_project_name()
+    api = get_api()
     project_id = get_project_id_by_name(project_name, api)
     tasks = get_active_tasks(project_id, api)
     tasks = filter_tasks(tasks, api)

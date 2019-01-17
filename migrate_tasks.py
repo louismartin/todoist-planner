@@ -1,6 +1,6 @@
 from todoist.api import TodoistAPI
 
-from todoist_planner import read_token, commit, get_active_tasks, filter_tasks, get_project_id_by_name
+from todoist_planner import read_token, get_project_name, get_api, commit, get_active_tasks, filter_tasks, get_project_id_by_name
 
 
 def migrate_task(task):
@@ -12,10 +12,8 @@ def migrate_task(task):
 
 
 if __name__ == '__main__':
-    api = TodoistAPI(read_token())
-    project_name = input('What project would you like to migrate? ')
-    api.reset_state()
-    api.sync()
+    project_name = get_project_name()
+    api = get_api()
     project_id = get_project_id_by_name(project_name, api)
     tasks = get_active_tasks(project_id, api)
     tasks = filter_tasks(tasks, api)
