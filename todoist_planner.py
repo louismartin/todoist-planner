@@ -78,7 +78,7 @@ class Task(Item):
         self.content = re.sub(self.stripped_content, value, self.content)
 
     def get_priority(self):
-        if None in [self.importance, self.urgency]:
+        if None in [self.importance, self.urgency, self.duration]:
             return None
         importance_weight = 1.5
         urgency_weight = 1
@@ -267,7 +267,7 @@ def label_tasks(tasks, api):
 
 
 def sort_tasks(tasks):
-    return sorted(tasks, key=lambda task: (task.get_priority(), -task.duration))
+    return sorted(tasks, key=lambda task: task.get_priority())
 
 
 def filter_tasks(tasks, api):
