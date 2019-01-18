@@ -176,3 +176,15 @@ def start_timer(minutes):
         elapsed = time.time() - start_time
         sys.stdout.write(f'\rElapsed: {seconds_to_human_readable(elapsed)}')
         time.sleep(1)
+
+
+def is_answer_yes(question):
+    assert question.endswith('?')
+    answer = input(question + ' (y/n): ')
+    if answer.lower() in ['y', 'yes']:
+        return True
+    elif answer.lower() in ['n', 'no']:
+        return False
+    else:
+        print('Incorrect answer, please answer with yes or no.')
+        return is_answer_yes(question)
