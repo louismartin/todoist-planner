@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import math
 from pathlib import Path
 import re
 import sys
@@ -85,7 +84,7 @@ class Task(Item):
         duration_weight = 0.5
         weighted_sum = (importance_weight * (self.importance / self.max_attribute_value)
                         + urgency_weight * (self.urgency / self.max_attribute_value)
-                        + duration_weight * min(self.duration / 300, 1))
+                        + duration_weight * min(self.duration / 300, 1) ** (1/2))
         priority = weighted_sum / (importance_weight + urgency_weight + duration_weight)
         assert priority <= 1
         return priority
