@@ -1,5 +1,5 @@
-from todoist_planner.utils import (get_project_name, get_api, get_project_id_by_name, get_active_tasks, filter_tasks,
-                                   label_tasks, sort_tasks, ask_question, commit)
+from todoist_planner.core import (get_project_name, get_api, get_project_id_by_name, get_active_tasks, filter_tasks,
+                                  label_tasks, sort_tasks, ask_question, commit)
 
 
 if __name__ == '__main__':
