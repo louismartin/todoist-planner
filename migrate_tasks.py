@@ -1,4 +1,5 @@
-from todoist_planner import get_project_name, get_api, commit, get_active_tasks, filter_tasks, get_project_id_by_name
+from todoist_planner.utils import (get_project_name, get_api, commit, get_active_tasks, filter_tasks,
+                                   get_project_id_by_name)
 
 
 def migrate_task(task):
