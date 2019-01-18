@@ -178,13 +178,10 @@ def start_timer(minutes):
         time.sleep(1)
 
 
-def is_answer_yes(question):
-    assert question.endswith('?')
-    answer = input(question + ' (y/n): ')
-    if answer.lower() in ['y', 'yes']:
-        return True
-    elif answer.lower() in ['n', 'no']:
-        return False
-    else:
-        print('Incorrect answer, please answer with yes or no.')
-        return is_answer_yes(question)
+def ask_question(question, possible_answers):
+    possible_answers_str = '/'.join(possible_answers)
+    answer = input(f'{question} ({possible_answers_str}): ')
+    if answer not in possible_answers:
+        print(f'Incorrect answer, please answer with {possible_answers_str}.')
+        ask_question(question, possible_answers)
+    return answer

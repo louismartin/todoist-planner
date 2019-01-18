@@ -1,5 +1,5 @@
 from todoist_planner.utils import (get_project_name, get_api, get_project_id_by_name, get_active_tasks, filter_tasks,
-                                   label_tasks, sort_tasks, start_timer)
+                                   label_tasks, sort_tasks, ask_question, commit)
 
 
 if __name__ == '__main__':
@@ -14,14 +14,11 @@ if __name__ == '__main__':
     # TODO: find a better way to handle this case
     tasks = get_active_tasks(project_id, api)
     tasks = filter_tasks(tasks, api)
-    sorted_tasks = sort_tasks(tasks)
-    time_available = int(input('How long do you have? (minutes): '))
-    time_remaining = time_available
-    selected_tasks = []
-    for task in sorted_tasks:
-        # TODO: Ask to split tasks that are too long
-        if task.duration <= time_remaining:
-            print(f'Selected: "{task["content"]}" ({task.duration}m)')
-            selected_tasks.append(task)
-            time_remaining -= task.duration
-    start_timer(time_available)
+    print('Tasks:')
+    for task in sort_tasks(tasks):
+        print('\n' + task.content + '\n')
+        answer = ask_question('Type c to complete, n for next', possible_answers=['c', 'n'])
+        if answer == 'c':
+            task.complete()
+            commit(api)
+        print('\n')
