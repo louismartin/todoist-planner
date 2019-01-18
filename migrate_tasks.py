@@ -7,6 +7,7 @@ def migrate_task(task):
         value = getattr(task, attr_name)
         if value is not None:
             setattr(task, attr_name, value)
+        task.attribute_set_callback()
 
 
 if __name__ == '__main__':

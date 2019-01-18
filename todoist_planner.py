@@ -91,15 +91,19 @@ class Task(Item):
 
     def get_todoist_priority(self):
         if self.get_priority() is None:
-            return
+            return None
         # Note: Keep in mind that very urgent is the priority 1 on clients. So, p1 will return 4 in the API.
-        return (4 - math.ceil(self.get_priority() * 4)) + 1
+        return 4 - int(self.get_priority() * 4)
 
     def is_labeled(self):
         return (None not in [getattr(self, attr_name) for attr_name in self.attribute_names])
 
-    def update_attributes(self):
-        self.update(content=self.content, priority=self.get_todoist_priority())
+    def add_changes_to_queue(self):
+        self.update(
+            content=self.content,
+            priority=self.get_todoist_priority(),
+            date_string=None,  # Remove due date
+        )
 
     def label(self):
         print(f'"{self.stripped_content}"')
@@ -179,6 +183,7 @@ def commit(api):
                 print(f'Response is a string ({response}), not valid.')
                 return False
             if response.get('error_tag', None) == 'LIMITS_REACHED':
+                # Todoist API does not accept more than 50 requests per minute
                 print(f'Limits reached.')
                 return False
             assert all(v == 'ok' for _, v in response['sync_status'].items()), response
@@ -197,6 +202,7 @@ def commit(api):
         while len(commands) > 0:
             batch.append(commands.pop())
             if len(batch) == 100:
+                # Todoist's API does not accept more than 100 commands at once
                 yield batch
                 batch = []
         if len(batch) > 0:
@@ -205,7 +211,7 @@ def commit(api):
     # Create one command for each modified task
     global MODIFIED_TASKS
     for task in list(MODIFIED_TASKS.values()):
-        task.update_attributes()
+        task.add_changes_to_queue()
     MODIFIED_TASKS = {}
     # Group commands by batches of 100
     pbar = tqdm(total=len(api.queue), desc='Committing')
