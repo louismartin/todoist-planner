@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta
 from pathlib import Path
 import sys
 import time
@@ -153,35 +152,3 @@ def filter_tasks(tasks, api):
     excluded_label_names = ['onhold', 'medecin', 'orsay', 'albert']
     excluded_label_ids = [labels[label_name] for label_name in excluded_label_names]
     return [task for task in tasks if not have_elements_in_common(task['labels'], excluded_label_ids)]
-
-
-def seconds_to_human_readable(seconds, display_seconds=True):
-    d = datetime(1, 1, 1) + timedelta(seconds=int(seconds))
-    human_readable = ''
-    if display_seconds:
-        human_readable = f'{d.second}s'
-    if seconds >= 60:
-        human_readable = f'{d.minute}m {human_readable}'
-    if seconds >= 3600:
-        human_readable = f'{d.hour}h {human_readable}'
-    if seconds >= 86400:
-        human_readable = f'{d.day-1}d {human_readable}'
-    return human_readable.strip()
-
-
-def start_timer(minutes):
-    start_time = time.time()
-    elapsed = 0
-    while elapsed < (minutes * 60):
-        elapsed = time.time() - start_time
-        sys.stdout.write(f'\rElapsed: {seconds_to_human_readable(elapsed)}')
-        time.sleep(1)
-
-
-def ask_question(question, possible_answers):
-    possible_answers_str = '/'.join(possible_answers)
-    answer = input(f'{question} ({possible_answers_str}): ')
-    if answer not in possible_answers:
-        print(f'Incorrect answer, please answer with {possible_answers_str}.')
-        ask_question(question, possible_answers)
-    return answer
