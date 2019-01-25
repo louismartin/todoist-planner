@@ -123,8 +123,7 @@ def reverse_dictionary(dic):
     return {v: k for k, v in dic.items()}
 
 
-def label_tasks(tasks, api):
-    unlabeled_tasks = [task for task in tasks if not task.is_labeled()]
+def label_tasks(unlabeled_tasks, api):
     if not unlabeled_tasks:
         print('No unlabeled tasks.')
         return

@@ -10,11 +10,14 @@ if __name__ == '__main__':
     project_id = get_project_id_by_name(project_name, api)
     tasks = get_active_tasks(project_id, api)
     tasks = filter_tasks(tasks, api)
-    label_tasks(tasks, api)
-    # Reload active tasks (tasks may have been completed or deleted)
-    # TODO: find a better way to handle this case
-    tasks = get_active_tasks(project_id, api)
-    tasks = filter_tasks(tasks, api)
+    unlabeled_tasks = [task for task in tasks if not task.is_labeled()]
+    while unlabeled_tasks:
+        label_tasks(unlabeled_tasks, api)
+        # Reload active tasks (tasks may have been completed or deleted)
+        # TODO: find a better way to handle this case
+        tasks = get_active_tasks(project_id, api)
+        tasks = filter_tasks(tasks, api)
+        unlabeled_tasks = [task for task in tasks if not task.is_labeled()]
     print('Tasks:')
     for task in sort_tasks(tasks):
         print('\n' + task.content + '\n')
