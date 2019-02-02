@@ -38,9 +38,10 @@ class Task(Item):
     def __init__(self, item):
         super().__init__(item.data, item.api)
         self.content = self['content']  # We will work on content as an attribute instead of an element of a dict
-        self.attribute_names = ['importance', 'urgency', 'duration']
+        self.attribute_names = ['importance', 'urgency', 'fun', 'duration']
         for attr_name, attribute in zip(self.attribute_names, [Attribute('<i{}>'),
                                                                Attribute('<u{}>'),
+                                                               Attribute('<f{}>'),
                                                                Attribute('<{}m>')]):
             # We set custom properties as static class variables (that's how properties work in python)
             setattr(self.__class__, attr_name, attribute)
@@ -64,15 +65,17 @@ class Task(Item):
         self.content = re.sub(self.stripped_content, value, self.content)
 
     def get_priority(self):
-        if None in [self.importance, self.urgency, self.duration]:
+        if None in [self.importance, self.urgency, self.fun, self.duration]:
             return None
         importance_weight = 1.5
         urgency_weight = 1
+        fun_weight = 0.5
         duration_weight = 0.5
         weighted_sum = (importance_weight * (self.importance / self.max_attribute_value)
                         + urgency_weight * (self.urgency / self.max_attribute_value)
+                        + fun_weight * (self.fun / self.max_attribute_value)
                         + duration_weight * min(self.duration / 300, 1) ** (1/2))
-        priority = weighted_sum / (importance_weight + urgency_weight + duration_weight)
+        priority = weighted_sum / (importance_weight + urgency_weight + fun_weight + duration_weight)
         assert priority <= 1
         return priority
 
@@ -97,6 +100,7 @@ class Task(Item):
         ask_texts = {
             'importance': f'How important is this task? (1-{self.max_attribute_value}): ',
             'urgency': f'How urgent is this task? (1-{self.max_attribute_value}): ',
+            'fun': f'How fun is this task? (1-{self.max_attribute_value}): ',
             'duration': 'How long will this task take? (minutes): ',
         }
         for attr_name in self.attribute_names:
