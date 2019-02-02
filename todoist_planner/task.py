@@ -10,13 +10,16 @@ class Attribute(property):
         attr_regex = str_format.format(r'(\d*?)')  # Attibutes have to be integers (for now)
 
         def set_attribute(task, value):
-            value = int(value)
-            if re.search(attr_regex, task.content) is None:
-                if prepend:
-                    task.content = str_format.format('') + ' ' + task.content
-                else:
-                    task.content += ' ' + str_format.format('')
-            task.content = re.sub(attr_regex, str_format.format(value), task.content)
+            if value is None:
+                task.content = re.sub(f' {attr_regex}', '', task.content)
+            else:
+                value = int(value)
+                if re.search(attr_regex, task.content) is None:
+                    if prepend:
+                        task.content = str_format.format('') + ' ' + task.content
+                    else:
+                        task.content += ' ' + str_format.format('')
+                task.content = re.sub(attr_regex, str_format.format(value), task.content)
             if callback:
                 task.attribute_set_callback()
 
@@ -64,6 +67,10 @@ class Task(Item):
     def stripped_content(self, value):
         self.content = re.sub(self.stripped_content, value, self.content)
 
+    def clear_attributes(self):
+        for attr_name in self.attribute_names:
+            getattr(self, attr_name, None)
+
     def get_priority(self):
         if None in [self.importance, self.urgency, self.fun, self.duration]:
             return None
@@ -104,26 +111,25 @@ class Task(Item):
             'duration': 'How long will this task take? (minutes): ',
         }
         for attr_name in self.attribute_names:
-            current_value = getattr(self, attr_name)
+            if getattr(self, attr_name) is not None:
+                continue
             ask_text = ask_texts[attr_name]
-            if current_value is not None:
-                # TODO: Remove this value if user inputs something
-                ask_text += str(current_value)
             new_value = input(ask_text)
-            # TODO: Better way to handle this cases
-            if new_value == '':   # User just validated current value
-                new_value = current_value
-            elif new_value == 'n':  # next
+            # TODO: Wrap all those cases in a method
+            if new_value in ['next', 'n']:
                 return
-            elif new_value == 'd':  # delete
+            elif new_value in ['delete', 'd']:
                 self.delete()
                 return
-            elif new_value == 'e':  # edit
+            elif new_value in ['edit', 'e']:
                 self.stripped_content = input('New task content: \n')
                 self.label()
                 return
-            elif new_value == 'c':  # complete
+            elif new_value in ['complete', 'c']:
                 self.complete()
+                return
+            elif new_value in ['clear', 'cl']:
+                self.clear_attributes()
                 return
             setattr(self, attr_name, new_value)
 
