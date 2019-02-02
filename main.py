@@ -3,10 +3,8 @@ from todoist_planner.core import (get_project_name, get_api, get_project_id_by_n
 from todoist_planner.utils import ask_question
 
 
-if __name__ == '__main__':
+def main(project_name, api):
     print('Welcome to Todoist planner!')
-    project_name = get_project_name()
-    api = get_api()
     project_id = get_project_id_by_name(project_name, api)
     tasks = get_active_tasks(project_id, api)
     tasks = filter_tasks(tasks, api)
@@ -26,3 +24,15 @@ if __name__ == '__main__':
             task.complete()
             commit(api)
         print('\n')
+
+
+if __name__ == '__main__':
+    try:
+        project_name = get_project_name()
+        api = get_api()
+        main(project_name, api)
+    except KeyboardInterrupt:
+        answer = ask_question('\nDo you want to commit changes?', ['y', 'n'])
+        if answer == 'y':
+            commit(api)
+        raise

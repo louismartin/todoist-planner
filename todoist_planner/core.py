@@ -6,6 +6,7 @@ from tqdm import tqdm
 from todoist.api import TodoistAPI
 
 from todoist_planner.task import Task
+from todoist_planner.utils import ask_question
 
 
 REPO_DIR = Path(__file__).resolve().parent.parent
