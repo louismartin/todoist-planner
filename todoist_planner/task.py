@@ -112,3 +112,12 @@ class Task(Item):
                       project_id=self['project_id'],
                       item_order=self['item_order'],
                       indent=self['indent'] + 1)
+
+    def split(self, api):
+        i = 0
+        while True:
+            content = input(f'\tSubtask {i+1} content: ')
+            self.add_subtask(content, api)
+            i += 1
+            if ask_question('Would you like to add another subtask?', possible_answers=['y', 'n']) == 'n':
+                break
