@@ -2,6 +2,8 @@ import re
 
 from todoist.models import Item
 
+from todoist_planner.utils import ask_question
+
 
 class Attribute(property):
     '''Custom property method that parses the task content to get an attribute'''
@@ -99,39 +101,10 @@ class Task(Item):
         self.update(
             content=self.content,
             priority=self.get_todoist_priority(),
-            date_string=None,  # Remove due date
+            # TODO: Remove date only if no hour set
+            #date_string=None,  # Remove due date
         )
 
-    def label(self):
-        print(f'"{self.stripped_content}"')
-        ask_texts = {
-            'importance': f'How important is this task? (1-{self.max_attribute_value}): ',
-            'urgency': f'How urgent is this task? (1-{self.max_attribute_value}): ',
-            'fun': f'How fun is this task? (1-{self.max_attribute_value}): ',
-            'duration': 'How long will this task take? (minutes): ',
-        }
-        for attr_name in self.attribute_names:
-            if getattr(self, attr_name) is not None:
-                continue
-            ask_text = ask_texts[attr_name]
-            new_value = input(ask_text)
-            # TODO: Wrap all those cases in a method
-            if new_value in ['next', 'n']:
-                return
-            elif new_value in ['delete', 'd']:
-                self.delete()
-                return
-            elif new_value in ['edit', 'e']:
-                self.stripped_content = input('New task content: \n')
-                self.label()
-                return
-            elif new_value in ['complete', 'c']:
-                self.complete()
-                return
-            elif new_value in ['clear', 'cl']:
-                self.clear_attributes()
-                return
-            setattr(self, attr_name, new_value)
 
     def add_subtask(self, content, api):
         # This will add a command to api.queue which will be committed in the next commit()

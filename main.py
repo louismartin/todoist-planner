@@ -27,12 +27,6 @@ def main(project_name, api):
 
 
 if __name__ == '__main__':
-    try:
-        project_name = get_project_name()
-        api = get_api()
-        main(project_name, api)
-    except KeyboardInterrupt:
-        answer = ask_question('\nDo you want to commit changes?', ['y', 'n'])
-        if answer == 'y':
-            commit(api)
-        raise
+    project_name = get_project_name()
+    api = get_api()
+    main(project_name, api)

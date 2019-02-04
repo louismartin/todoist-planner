@@ -124,6 +124,47 @@ def reverse_dictionary(dic):
     return {v: k for k, v in dic.items()}
 
 
+def label_task(task, api):
+    def resolve_command(cmd):
+        cmd_resolved = True
+        if cmd in ['next', 'n']:
+            pass
+        elif cmd in ['delete', 'd']:
+            task.delete()
+        elif cmd in ['edit', 'e']:
+            task.stripped_content = input('New task content: \n')
+            label_task(task, api)
+        elif cmd in ['complete', 'c']:
+            task.complete()
+        elif cmd in ['clear', 'cl']:
+            task.clear_attributes()
+        elif cmd in ['split', 's']:
+            task.split(api)
+        elif cmd in ['commit']:
+            commit(api)
+            label_task(task, api)
+        else:
+            cmd_resolved = False
+        return cmd_resolved
+
+    print(f'"{task.stripped_content}"')
+    ask_texts = {
+        'importance': f'How important is this task? (1-{task.max_attribute_value}): ',
+        'urgency': f'How urgent is this task? (1-{task.max_attribute_value}): ',
+        'fun': f'How fun is this task? (1-{task.max_attribute_value}): ',
+        'duration': 'How long will this task take? (minutes): ',
+    }
+    for attr_name in task.attribute_names:
+        if getattr(task, attr_name) is not None:
+            continue
+        ask_text = ask_texts[attr_name]
+        new_value = input(ask_text)
+        cmd_resolved = resolve_command(new_value)
+        if cmd_resolved:
+            return
+        setattr(task, attr_name, new_value)
+
+
 def label_tasks(unlabeled_tasks, api):
     if not unlabeled_tasks:
         print('No unlabeled tasks.')
@@ -132,7 +173,7 @@ def label_tasks(unlabeled_tasks, api):
     print(f'There are {len(unlabeled_tasks)} unlabeled tasks:\n')
     for i, task in enumerate(unlabeled_tasks):
         sys.stdout.write(f'{i+1}.')
-        task.label()
+        label_task(task, api)
         print('\n')
     commit(api)
     print('~' * 50)
