@@ -13,7 +13,7 @@ class Attribute(property):
 
         def set_attribute(task, value):
             if value is None:
-                task.content = re.sub(f' {attr_regex}', '', task.content)
+                task.content = re.sub(f'{attr_regex}', '', task.content).strip()
             else:
                 value = int(value)
                 if re.search(attr_regex, task.content) is None:
@@ -59,6 +59,8 @@ class Task(Item):
         if self.get_priority() is not None:
             # Convert the priority to be between 0 and 9 included
             self.priority = f'{round(self.get_priority() * 100) - 1:02d}'
+        else:
+            self.priority = None
         self._register_task_as_modified()
 
     @property
@@ -71,7 +73,7 @@ class Task(Item):
 
     def clear_attributes(self):
         for attr_name in self.attribute_names:
-            getattr(self, attr_name, None)
+            setattr(self, attr_name, None)
 
     def get_priority(self):
         if None in [self.importance, self.urgency, self.fun, self.duration]:
@@ -90,7 +92,7 @@ class Task(Item):
 
     def get_todoist_priority(self):
         if self.get_priority() is None:
-            return None
+            return 1
         # Note: Keep in mind that very urgent is the priority 1 on clients. So, p1 will return 4 in the API.
         return 4 - int(self.get_priority() * 4)
 
