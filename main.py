@@ -10,7 +10,14 @@ def main(project_name, api):
     tasks = filter_tasks(tasks, api)
     unlabeled_tasks = [task for task in tasks if not task.is_labeled()]
     while unlabeled_tasks:
-        label_tasks(unlabeled_tasks, api)
+        try:
+            label_tasks(unlabeled_tasks, api)
+        except BaseException:
+            answer = ask_question('\nDo you want to commit changes?', ['y', 'n'])
+            if answer == 'y':
+                commit(api)
+            raise
+
         # Reload active tasks (tasks may have been completed or deleted)
         # TODO: find a better way to handle this case
         tasks = get_active_tasks(project_id, api)
