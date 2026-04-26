@@ -1,9 +1,8 @@
 from pathlib import Path
 import sys
-import time
 
 from tqdm import tqdm
-from todoist.api import TodoistAPI
+from todoist_api_python.api import TodoistAPI
 
 from todoist_planner.task import Task
 from todoist_planner.utils import ask_question
@@ -39,84 +38,51 @@ def get_project_name():
 
 
 def get_api():
-    api = TodoistAPI(read_token())
-    api.reset_state()
-    api.sync()
-    return api
+    return TodoistAPI(read_token())
 
 
 def commit(api):
-    def sync_commands_with_retry(commands, api):
-        def is_valid(response):
-            if type(response) == str:
-                print(f'Response is a string ({response}), not valid.')
-                return False
-            if response.get('error_tag', None) == 'LIMITS_REACHED':
-                # Todoist API does not accept more than 50 requests per minute
-                print(f'Limits reached.')
-                return False
-            assert all(v == 'ok' for _, v in response['sync_status'].items()), response
-            return True
-
-        response = api.sync(commands)
-        sleep_time = 5
-        while not is_valid(response):
-            print(f'Retrying in {sleep_time} seconds.')
-            time.sleep(sleep_time)
-            sleep_time *= 2
-            response = api.sync(commands)
-
-    def batch_commands(commands):
-        batch = []
-        while len(commands) > 0:
-            batch.append(commands.pop())
-            if len(batch) == 100:
-                # Todoist's API does not accept more than 100 commands at once
-                yield batch
-                batch = []
-        if len(batch) > 0:
-            yield batch
-
-    # Create one command for each modified task
+    """Commit all modified tasks to the API."""
+    pbar = tqdm(total=len(Task.modified_tasks), desc='Committing')
     for task in list(Task.modified_tasks.values()):
-        task.add_changes_to_queue()
+        task.save(api)
+        pbar.update(1)
     Task.modified_tasks = {}
-    # Group commands by batches of 100
-    pbar = tqdm(total=len(api.queue), desc='Committing')
-    for batch in batch_commands(api.queue):
-        sync_commands_with_retry(batch, api)
-        pbar.update(len(batch))
-    assert len(api.queue) == 0
+    pbar.close()
 
 
 def get_project_id_by_name(name, api):
-    for project in api.projects.all():
-        if project['name'].lower() == name.lower():
-            return project['id']
+    for batch in api.get_projects():
+        for project in batch:
+            if project.name.lower() == name.lower():
+                return project.id
     raise NameError(f'Project {name} cannot be found.')
 
 
 def get_active_tasks(project_id, api):
     tasks = []
-    for item in api.items.all():
-        if item['project_id'] != project_id:
-            continue
-        if item['checked']:
-            continue
-        tasks.append(Task(item))
+    for batch in api.get_tasks(project_id=project_id):
+        for item in batch:
+            if item.is_completed:
+                continue
+            tasks.append(Task(item, api))
     return tasks
 
 
 def get_labels(api):
-    return {label['name']: label['id'] for label in api.labels.all()}
+    labels = {}
+    for batch in api.get_labels():
+        for label in batch:
+            labels[label.name] = label.id
+    return labels
 
 
 def get_notes(task, api):
-    # TODO: we go through all the notes at everycall, maybe we should do it once and store in notes_by_task_id dict
+    """Get comments/notes for a task."""
     notes = []
-    for note in api.notes.all():
-        if note['item_id'] == task['id']:
-            notes.append(note)
+    for batch in api.get_comments(task_id=task.id):
+        for comment in batch:
+            notes.append(comment)
     return notes
 
 
@@ -130,12 +96,12 @@ def label_task(task, api):
         if cmd in ['next', 'n']:
             pass
         elif cmd in ['delete', 'd']:
-            task.delete()
+            task.delete(api)
         elif cmd in ['edit', 'e']:
             task.stripped_content = input('New task content: \n')
             label_task(task, api)
         elif cmd in ['complete', 'c']:
-            task.complete()
+            task.complete(api)
         elif cmd in ['clear', 'cl']:
             task.clear_attributes()
         elif cmd in ['split', 's']:
@@ -180,16 +146,16 @@ def label_tasks(unlabeled_tasks, api):
 
 
 def sort_tasks(tasks):
-    return sorted(tasks, key=lambda task: task.get_priority())
+    return sorted(tasks, key=lambda task: task.get_priority() or 0)
 
 
 def filter_tasks(tasks, api):
-    def have_elements_in_common(list1, list2):
-        return len(set(list1)) + len(set(list2)) != len(set(list1 + list2))
-
-    # TODO: Specific to my needs, a better solution would be to create a new label @no-planner and apply it to skipped
-    # tasks during labelling
-    labels = get_labels(api)
+    """Filter out tasks with excluded labels."""
     excluded_label_names = ['onhold', 'medecin', 'orsay', 'albert']
-    excluded_label_ids = [labels[label_name] for label_name in excluded_label_names]
-    return [task for task in tasks if not have_elements_in_common(task['labels'], excluded_label_ids)]
+    excluded_label_names_lower = [name.lower() for name in excluded_label_names]
+
+    def has_excluded_label(task):
+        task_labels = [label.lower() for label in task.labels]
+        return any(excluded in task_labels for excluded in excluded_label_names_lower)
+
+    return [task for task in tasks if not has_excluded_label(task)]

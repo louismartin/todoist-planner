@@ -1,7 +1,5 @@
 import re
 
-from todoist.models import Item
-
 from todoist_planner.utils import ask_question
 
 
@@ -35,14 +33,23 @@ class Attribute(property):
         super().__init__(get_attribute, set_attribute)
 
 
-class Task(Item):
+class Task:
+    """Wrapper around Todoist Task object with attribute parsing."""
 
     max_attribute_value = 5
-    modified_tasks = {}  # Track modified tasks for batch processing (server limits requests)
+    modified_tasks = {}  # Track modified tasks for batch processing
 
-    def __init__(self, item):
-        super().__init__(item.data, item.api)
-        self.content = self['content']  # We will work on content as an attribute instead of an element of a dict
+    def __init__(self, todoist_task, api):
+        self._todoist_task = todoist_task
+        self._api = api
+        self.id = todoist_task.id
+        self.project_id = todoist_task.project_id
+        self.content = todoist_task.content
+        self.labels = todoist_task.labels  # List of label names (strings)
+        self.parent_id = todoist_task.parent_id
+        self._is_deleted = False
+        self._is_completed = False
+
         self.attribute_names = ['importance', 'urgency', 'fun', 'duration']
         for attr_name, attribute in zip(self.attribute_names, [Attribute('<i{}>'),
                                                                Attribute('<u{}>'),
@@ -53,7 +60,7 @@ class Task(Item):
         setattr(self.__class__, 'priority', Attribute('<p{}>', prepend=True, callback=False))
 
     def _register_task_as_modified(self):
-        Task.modified_tasks[self['id']] = self
+        Task.modified_tasks[self.id] = self
 
     def attribute_set_callback(self):
         if self.get_priority() is not None:
@@ -69,7 +76,8 @@ class Task(Item):
 
     @stripped_content.setter
     def stripped_content(self, value):
-        self.content = re.sub(self.stripped_content, value, self.content)
+        self.content = re.sub(re.escape(self.stripped_content), value, self.content)
+        self._register_task_as_modified()
 
     def clear_attributes(self):
         for attr_name in self.attribute_names:
@@ -99,21 +107,37 @@ class Task(Item):
     def is_labeled(self):
         return (None not in [getattr(self, attr_name) for attr_name in self.attribute_names])
 
-    def add_changes_to_queue(self):
-        self.update(
+    def save(self, api):
+        """Save changes to the task via API."""
+        if self._is_deleted or self._is_completed:
+            return
+        api.update_task(
+            task_id=self.id,
             content=self.content,
             priority=self.get_todoist_priority(),
-            # TODO: Remove date only if no hour set
-            #date_string=None,  # Remove due date
         )
 
+    def complete(self, api):
+        """Mark task as completed."""
+        api.complete_task(task_id=self.id)
+        self._is_completed = True
+        # Remove from modified tasks since it's completed
+        Task.modified_tasks.pop(self.id, None)
+
+    def delete(self, api):
+        """Delete the task."""
+        api.delete_task(task_id=self.id)
+        self._is_deleted = True
+        # Remove from modified tasks since it's deleted
+        Task.modified_tasks.pop(self.id, None)
 
     def add_subtask(self, content, api):
-        # This will add a command to api.queue which will be committed in the next commit()
-        api.items.add(content,
-                      project_id=self['project_id'],
-                      item_order=self['item_order'],
-                      indent=self['indent'] + 1)
+        """Add a subtask under this task."""
+        api.add_task(
+            content=content,
+            project_id=self.project_id,
+            parent_id=self.id,
+        )
 
     def split(self, api):
         i = 0

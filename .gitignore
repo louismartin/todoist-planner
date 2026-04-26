@@ -2,3 +2,5 @@
 *.swp
 .venv
 token
+config.yaml
+CLAUDE.local.md

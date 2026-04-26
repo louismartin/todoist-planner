@@ -1,0 +1,35 @@
+# Todoist Planner Configuration
+# Copy this file to config.yaml and fill in your credentials.
+
+# Twilio WhatsApp API Configuration
+# Get your credentials from https://www.twilio.com/console
+twilio:
+  # Account SID from Twilio Console
+  account_sid: "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+  # Auth Token from Twilio Console
+  auth_token: "your-auth-token-here"
+
+  # Twilio WhatsApp Sandbox number (or your approved WhatsApp Business number)
+  # For sandbox: "whatsapp:+14155238886"
+  from_number: "whatsapp:+14155238886"
+
+  # Your WhatsApp phone number with country code
+  # Example: "whatsapp:+33612345678"
+  to_number: "whatsapp:+33XXXXXXXXX"
+
+# Schedule Configuration
+schedule:
+  # Projects to include on weekdays (Monday-Friday)
+  weekday_projects:
+    - "Mistral"
+    - "Boîte de réception"
+
+  # Projects to include on weekends (Saturday-Sunday)
+  weekend_projects:
+    - "Personal"
+    - "GluGlu"
+    - "Boîte de réception"
+
+  # Number of top tasks to include in the daily summary
+  num_tasks: 3

@@ -1,1 +1,4 @@
-todoist-python
+todoist-api-python
+twilio
+pyyaml
+anthropic
