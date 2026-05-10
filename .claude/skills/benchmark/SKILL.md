@@ -37,7 +37,7 @@ Keep this short (2-3 questions max), don't turn it into an interrogation. The go
 
 ### Phase 1: Parallel Deep Research (3 subagents)
 
-Launch 3 subagents in parallel using the Agent tool. Each one uses `WebSearch` + `WebFetch` to gather information.
+Launch 3 subagents in parallel using the Agent tool. Each one searches the web to gather information. Prefer web search over direct URL fetching — only fetch a specific URL if you're confident it exists and isn't behind Cloudflare.
 
 **Subagent 1: "Buying Guide" — What to know before buying**
 - Search queries (mix FR + EN): "guide d'achat [produit]", "comment choisir [produit]", "how to choose [product]", "[product] buying guide", "[produit] pieges a eviter"
@@ -147,6 +147,14 @@ Present a clear comparison table:
 
 - If the product was a Todoist task, mark it as complete
 - If Louis bought on Amazon/Cdiscount, suggest checking for a follow-up task (e.g. "return if not satisfied within 30 days")
+
+## Known Issues (opencode / VPS environments)
+
+If running on opencode or a VPS with a datacenter IP:
+- **Google search scraping won't work** — Google returns CAPTCHAs/JS challenges. Always use the dedicated web search tool (e.g. `WebSearch` in opencode uses Exa API) instead of fetching Google search URLs directly.
+- **Cloudflare-protected sites return 403** — Reddit, StackOverflow, and many retail sites block datacenter IPs. Don't retry on 403, use web search with `site:domain.com` queries instead.
+- **Don't guess/hallucinate URLs** — fetching URLs that don't exist returns 404. Use web search to find real article URLs first, then fetch them.
+- **Retail site workaround**: instead of navigating to Amazon/Cdiscount directly, search for `site:amazon.fr [product name]` to find specific product page URLs.
 
 ## Navigation Tips (Playwright MCP)
 
